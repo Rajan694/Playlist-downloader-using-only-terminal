@@ -1,45 +1,17 @@
 'use strict';
-
 const path = require('path');
 const ytDlp = require('yt-dlp-exec');
 const { renderProgressBar } = require('./progress');
-
-function formatFileName(title) {
-  if (!title) return 'audio';
-
-  // Stop at first special character (anything except letters, numbers, and space)
-  const clean = title.split(/[^a-zA-Z0-9 ]/)[0];
-
-  // Trim and limit length
-  return clean.trim().slice(0, 50) || 'audio';
-}
-
-async function getVideoTitle(videoUrl) {
-  return new Promise((resolve, reject) => {
-    const subprocess = ytDlp.exec(videoUrl, {
-      getTitle: true,
-      quiet: true,
-    });
-
-    let title = '';
-
-    subprocess.stdout.on('data', (chunk) => {
-      title += chunk.toString();
-    });
-
-    subprocess.on('close', (code) => {
-      if (code === 0) resolve(title.trim());
-      else reject(new Error('Failed to get title'));
-    });
-
-    subprocess.on('error', reject);
-  });
-}
+const { formatFileName } = require('./filename');
+const { embedLyricsIfPossible } = require('./lyrics');
+const { getVideoTitle } = require('./videoTitle');
 
 async function downloadAudioForItem(item, targetDir) {
   const videoUrl = `https://www.youtube.com/watch?v=${item.id}`;
   const rawTitle = await getVideoTitle(videoUrl);
   const fileName = formatFileName(rawTitle);
+  const outputTemplate = path.join(targetDir, `${fileName} [%(id)s].%(ext)s`);
+  const finalFilePath = path.join(targetDir, `${fileName} [${item.id}].mp3`);
 
   return new Promise((resolve, reject) => {
     renderProgressBar(0);
@@ -47,10 +19,12 @@ async function downloadAudioForItem(item, targetDir) {
     const subprocess = ytDlp.exec(
       videoUrl,
       {
-        output: path.join(targetDir, `${fileName} [%(id)s].%(ext)s`),
+        output: outputTemplate,
         extractAudio: true,
         audioFormat: 'mp3',
         audioQuality: 0,
+        addMetadata: true,
+        embedThumbnail: true,
         noWarnings: true,
         progress: true,
       },
@@ -77,10 +51,15 @@ async function downloadAudioForItem(item, targetDir) {
       reject(err);
     });
 
-    subprocess.on('close', (code) => {
+    subprocess.on('close', async (code) => {
       process.stdout.write('\n');
-      if (code === 0) resolve();
-      else reject(new Error(`yt-dlp exited with code ${code}`));
+      if (code !== 0) {
+        reject(new Error(`yt-dlp exited with code ${code}`));
+        return;
+      }
+
+      await embedLyricsIfPossible(fileName, finalFilePath);
+      resolve();
     });
   });
 }

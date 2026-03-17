@@ -24,7 +24,6 @@ async function findExistingIds(targetDir, playlistItems) {
   const missing = [];
 
   for (const item of playlistItems) {
-    console.log(item, existingIds);
     if (item.id && existingIds.has(item.id)) existing.push(item);
     else missing.push(item);
   }

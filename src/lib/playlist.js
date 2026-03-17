@@ -18,15 +18,29 @@ async function getPlaylistInfo (url) {
 
   return {
     title: result.title || '',
-    items: entries.map(entry => ({
-      id: entry.id,
-      title: entry.title,
-      duration: entry.duration || 0
-    }))
+    items: entries.map(entry => {
+      const categories = Array.isArray(entry.categories) ? entry.categories : []
+      const genre = categories.length ? categories[0] : ''
+      const thumbnails = Array.isArray(entry.thumbnails) ? entry.thumbnails : []
+      const thumbnailUrl =
+        entry.thumbnail ||
+        (thumbnails.length && (thumbnails[0].url || thumbnails[0].id || thumbnails[0].value)) ||
+        ''
+
+      return {
+        id: entry.id,
+        title: entry.title,
+        duration: entry.duration || 0,
+        // Extra metadata commonly mapped into audio tags
+        artist: entry.artist || entry.uploader || entry.channel || '',
+        album: entry.album || result.title || '',
+        genre,
+        thumbnail: thumbnailUrl
+      }
+    })
   }
 }
 
 module.exports = {
   getPlaylistInfo
 }
-
